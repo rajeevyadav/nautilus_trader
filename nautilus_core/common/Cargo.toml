@@ -9,6 +9,10 @@ edition = "2021"
 name = "nautilus_common"
 crate-type = ["rlib", "cdylib", "staticlib"]
 
+[[bench]]
+name = "bench_callback"
+harness = false
+
 [dependencies]
 nautilus_core = { path = "../core" }
 nautilus_model = { path = "../model" }
@@ -25,3 +29,6 @@ default = []
 
 [build-dependencies]
 cbindgen = "0.24.3"
+
+[dev-dependencies]
+criterion = { version = "0.3", features = ["html_reports"] }
