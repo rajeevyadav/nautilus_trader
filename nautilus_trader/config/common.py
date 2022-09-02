@@ -15,7 +15,7 @@
 
 import importlib
 import importlib.util
-from typing import Any, Dict, FrozenSet, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional
 
 import fsspec
 import pydantic
@@ -109,6 +109,8 @@ class InstrumentProviderConfig(NautilusConfig):
         The list of instrument IDs to be loaded on start (if `load_all_instruments` is False).
     filters : frozendict, optional
         The venue specific instrument loading filters to apply.
+    log_warnings : bool, default True
+        If parser warnings should be logged.
     """
 
     class Config:
@@ -133,6 +135,7 @@ class InstrumentProviderConfig(NautilusConfig):
     load_all: bool = False
     load_ids: Optional[FrozenSet[str]] = None
     filters: Optional[Dict[str, Any]] = None
+    log_warnings: bool = True
 
 
 class DataEngineConfig(NautilusConfig):
@@ -213,7 +216,7 @@ class StreamingConfig(NautilusConfig):
     fs_storage_options: Optional[Dict] = None
     flush_interval_ms: Optional[int] = None
     replace_existing: bool = False
-    include_types: Optional[Tuple[type]] = None
+    include_types: Optional[List[str]] = None
 
     @property
     def fs(self):

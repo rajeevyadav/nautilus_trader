@@ -55,6 +55,7 @@ class FTXInstrumentProvider(InstrumentProvider):
         )
 
         self._client = client
+        self._log_warnings = config.log_warnings if config else True
 
     async def load_all_async(self, filters: Optional[Dict] = None) -> None:
         filters_str = "..." if not filters else f" with filters {filters}..."
@@ -107,7 +108,8 @@ class FTXInstrumentProvider(InstrumentProvider):
         symbols: List[str] = [instrument_id.symbol.value for instrument_id in instrument_ids]
 
         for data in assets_res:
-            if data["name"] not in symbols:
+            asset_name = data["name"]
+            if asset_name not in symbols:
                 continue
             self._parse_instrument(data, account_info)
 
@@ -129,7 +131,6 @@ class FTXInstrumentProvider(InstrumentProvider):
             return
 
         data: Dict[str, Any] = await self._client.get_market(instrument_id.symbol.value)
-
         self._parse_instrument(data, account_info)
 
     def _parse_instrument(
@@ -137,23 +138,27 @@ class FTXInstrumentProvider(InstrumentProvider):
         data: Dict[str, Any],
         account_info: Dict[str, Any],
     ) -> None:
-        asset_type = data["type"]
+        try:
+            asset_type = data["type"]
 
-        instrument: Instrument = parse_instrument(
-            account_info=account_info,
-            data=data,
-            ts_init=time.time_ns(),
-        )
+            instrument: Instrument = parse_instrument(
+                account_info=account_info,
+                data=data,
+                ts_init=time.time_ns(),
+            )
 
-        if asset_type == "future":
-            if instrument.native_symbol.value.endswith("-PERP"):
-                self.add_currency(currency=instrument.get_base_currency())
-        elif asset_type == "spot":
-            self.add_currency(
-                currency=instrument.get_base_currency()
-            )  # TODO: Temporary until tokenized equity
-            # if not instrument.info.get("tokenizedEquity"):
-            #     self.add_currency(currency=instrument.get_base_currency())
+            if asset_type == "future":
+                if instrument.native_symbol.value.endswith("-PERP"):
+                    self.add_currency(currency=instrument.get_base_currency())
+            elif asset_type == "spot":
+                self.add_currency(
+                    currency=instrument.get_base_currency()
+                )  # TODO: Temporary until tokenized equity
+                # if not instrument.info.get("tokenizedEquity"):
+                #     self.add_currency(currency=instrument.get_base_currency())
 
-        self.add_currency(currency=instrument.quote_currency)
-        self.add(instrument=instrument)
+            self.add_currency(currency=instrument.quote_currency)
+            self.add(instrument=instrument)
+        except ValueError as e:
+            if self._log_warnings:
+                self._log.warning(f"Unable to parse instrument {data['name']}, {e}.")
