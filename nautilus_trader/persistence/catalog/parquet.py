@@ -36,28 +36,77 @@ from nautilus_trader.model.data.tick import TradeTick
 from nautilus_trader.model.objects import FIXED_SCALAR
 from nautilus_trader.persistence.catalog.base import BaseDataCatalog
 from nautilus_trader.persistence.catalog.rust.reader import ParquetFileReader
-from nautilus_trader.persistence.external.metadata import load_mappings
 from nautilus_trader.serialization.arrow.serializer import ParquetSerializer
+from nautilus_trader.serialization.arrow.serializer import get_schema
 from nautilus_trader.serialization.arrow.serializer import list_schemas
 from nautilus_trader.serialization.arrow.util import camel_to_snake_case
 from nautilus_trader.serialization.arrow.util import class_to_filename
-from nautilus_trader.serialization.arrow.util import clean_key
 from nautilus_trader.serialization.arrow.util import dict_of_lists_to_list_of_dicts
 
 
-class ParquetDataCatalog(BaseDataCatalog):
-    """
-    Provides a queryable data catalog persisted to file in parquet format.
+class ParquetDataCatalogWriter:
+    """ParquetDataCatalogWriter"""
 
-    Parameters
-    ----------
-    path : str
-        The root path for this data catalog. Must exist and must be an absolute path.
-    fs_protocol : str, default 'file'
-        The fsspec filesystem protocol to use.
-    fs_storage_options : Dict, optional
-        The fs storage options.
-    """
+    def __init__(
+        self,
+        path: str,
+        fs_protocol: str = "file",
+        fs_storage_options: Optional[Dict] = None,
+    ):
+        """ """
+        self.fs_protocol = fs_protocol
+        self.fs_storage_options = fs_storage_options or {}
+        self.fs: fsspec.AbstractFileSystem = fsspec.filesystem(
+            self.fs_protocol, **self.fs_storage_options
+        )
+        self.str_path = path
+        self.path: pathlib.Path = pathlib.Path(path)
+
+    def _make_filename(self, cls: type, partitions: Dict):
+        fn = f"{cls.__name__}"
+        for k, v in partitions.items():
+            fn += f"/{k}={v}"
+        return fn + "/"
+
+    def _determine_partition_attrs(self, cls, partitions_attrs: Optional[List[str]]) -> List[str]:
+        partitions_attrs = partitions_attrs or []
+        if "instrument_id" in dir(cls):
+            partitions_attrs = ["instrument_id"] + partitions_attrs
+        return partitions_attrs
+
+    def _rust_writer(self, cls: type, objects: List):
+        pass
+
+    def _pyarrow_writer(self, cls: type, objects: List, partition_attrs: Optional[List[str]]):
+        schema = get_schema(cls)
+        partitions = self._determine_partition_attrs(cls, partition_attrs)
+
+        def grouper(x):
+            return tuple(getattr(x, k) for k in partitions)
+
+        for part_vals, chunk in itertools.groupby(sorted(objects, key=grouper), key=grouper):
+            chunk = list(chunk)
+            part = dict(zip(partitions, part_vals))
+            filename = self._make_filename(cls=cls, partitions=part)
+            table = pa.Table.from_pylist([obj.to_dict(obj) for obj in chunk], schema=schema)
+            print(table)
+
+    def write_objects(
+        self, objects: List, partition_attrs: List[str] = None, use_rust=False
+    ) -> None:
+        assert len(objects), "`objects` list was empty"
+        types = set(map(type, objects))
+        assert len(types) == 1, f"`objects` must be same type, found {types=}"
+        cls = list(types)[0]
+        assert not use_rust or (cls in (QuoteTick, TradeTick))
+        if use_rust:
+            return self._rust_writer(cls=cls, objects=objects)
+        else:
+            return self._pyarrow_writer(cls=cls, objects=objects, partition_attrs=partition_attrs)
+
+
+class ParquetDataCatalogReader:
+    """ParquetDataCatalogReader"""
 
     def __init__(
         self,
@@ -70,34 +119,29 @@ class ParquetDataCatalog(BaseDataCatalog):
         self.fs: fsspec.AbstractFileSystem = fsspec.filesystem(
             self.fs_protocol, **self.fs_storage_options
         )
-        self.path: pathlib.Path = pathlib.Path(path)
         self.str_path = path
-
-    @classmethod
-    def from_env(cls):
-        return cls.from_uri(uri=os.path.join(os.environ["NAUTILUS_PATH"]))
-
-    @classmethod
-    def from_uri(cls, uri):
-        if "://" not in uri:
-            # Assume a local path
-            uri = "file://" + uri
-        parsed = infer_storage_options(uri)
-        path = parsed.pop("path")
-        protocol = parsed.pop("protocol")
-        storage_options = parsed.copy()
-        return cls(path=path, fs_protocol=protocol, fs_storage_options=storage_options)
+        self.path: pathlib.Path = pathlib.Path(path)
 
     # -- QUERIES -----------------------------------------------------------------------------------
 
-    def query(self, cls, filter_expr=None, instrument_ids=None, as_nautilus=False, **kwargs):
+    def query(
+        self,
+        cls: type,
+        filter_expr=None,
+        instrument_ids=None,
+        start: Optional[Union[pd.Timestamp, str, int]] = None,
+        end: Optional[Union[pd.Timestamp, str, int]] = None,
+        **kwargs,
+    ):
+        """Top level query method"""
         if not is_nautilus_class(cls):
             # Special handling for generic data
             return self.generic_data(
                 cls=cls,
                 filter_expr=filter_expr,
                 instrument_ids=instrument_ids,
-                as_nautilus=as_nautilus,
+                start=start,
+                end=end,
                 **kwargs,
             )
         else:
@@ -105,7 +149,8 @@ class ParquetDataCatalog(BaseDataCatalog):
                 cls=cls,
                 filter_expr=filter_expr,
                 instrument_ids=instrument_ids,
-                as_nautilus=as_nautilus,
+                start=start,
+                end=end,
                 **kwargs,
             )
 
@@ -113,29 +158,15 @@ class ParquetDataCatalog(BaseDataCatalog):
         self,
         cls: type,
         instrument_ids: Optional[List[str]] = None,
-        filter_expr: Optional[Callable] = None,
-        start: Optional[Union[pd.Timestamp, str, int]] = None,
-        end: Optional[Union[pd.Timestamp, str, int]] = None,
-        ts_column: str = "ts_init",
         raise_on_empty: bool = True,
-        instrument_id_column="instrument_id",
         table_kwargs: Optional[Dict] = None,
-        clean_instrument_keys: bool = True,
         as_dataframe: bool = True,
         projections: Optional[Dict] = None,
         **kwargs,
     ):
-        filters = [filter_expr] if filter_expr is not None else []
         if instrument_ids is not None:
             if not isinstance(instrument_ids, list):
                 instrument_ids = [instrument_ids]
-            if clean_instrument_keys:
-                instrument_ids = list(set(map(clean_key, instrument_ids)))
-            filters.append(ds.field(instrument_id_column).cast("string").isin(instrument_ids))
-        if start is not None:
-            filters.append(ds.field(ts_column) >= int(pd.Timestamp(start).to_datetime64()))
-        if end is not None:
-            filters.append(ds.field(ts_column) <= int(pd.Timestamp(end).to_datetime64()))
 
         full_path = self._make_path(cls=cls)
         if not (self.fs.exists(full_path) or self.fs.isdir(full_path)):
@@ -176,12 +207,6 @@ class ParquetDataCatalog(BaseDataCatalog):
             )
         else:
             return self._handle_table_nautilus(table=table, cls=cls, mappings=mappings)
-
-    def load_inverse_mappings(self, path):
-        mappings = load_mappings(fs=self.fs, path=path)
-        for key in mappings:
-            mappings[key] = {v: k for k, v in mappings[key].items()}
-        return mappings
 
     @staticmethod
     def _handle_table_dataframe(
@@ -301,6 +326,24 @@ class ParquetDataCatalog(BaseDataCatalog):
             **kwargs,
         )
 
+
+class FeatherDataCatalogReader:
+    """FeatherDataCatalogReader"""
+
+    def __init__(
+        self,
+        path: str,
+        fs_protocol: str = "file",
+        fs_storage_options: Optional[Dict] = None,
+    ):
+        self.fs_protocol = fs_protocol
+        self.fs_storage_options = fs_storage_options or {}
+        self.fs: fsspec.AbstractFileSystem = fsspec.filesystem(
+            self.fs_protocol, **self.fs_storage_options
+        )
+        self.str_path = path
+        self.path: pathlib.Path = pathlib.Path(path)
+
     def list_data_types(self):
         glob_path = resolve_path(self.path / "data" / "*.parquet", fs=self.fs)
         return [pathlib.Path(p).stem for p in self.fs.glob(glob_path)]
@@ -351,6 +394,50 @@ class ParquetDataCatalog(BaseDataCatalog):
                     raise
                 print(f"Failed to deserialize {cls_name}: {e}")
         return sorted(sum(data.values(), list()), key=lambda x: x.ts_init)
+
+
+class ParquetDataCatalog(BaseDataCatalog):
+    """
+    Provides a queryable data catalog persisted to file in parquet format.
+
+    Parameters
+    ----------
+    path : str
+        The root path for this data catalog. Must exist and must be an absolute path.
+    fs_protocol : str, default 'file'
+        The fsspec filesystem protocol to use.
+    fs_storage_options : Dict, optional
+        The fs storage options.
+    """
+
+    def __init__(
+        self,
+        path: str,
+        fs_protocol: str = "file",
+        fs_storage_options: Optional[Dict] = None,
+    ):
+        self.fs_protocol = fs_protocol
+        self.fs_storage_options = fs_storage_options or {}
+        self.fs: fsspec.AbstractFileSystem = fsspec.filesystem(
+            self.fs_protocol, **self.fs_storage_options
+        )
+        self.path: pathlib.Path = pathlib.Path(path)
+        self.str_path = path
+
+    @classmethod
+    def from_env(cls):
+        return cls.from_uri(uri=os.path.join(os.environ["NAUTILUS_PATH"]))
+
+    @classmethod
+    def from_uri(cls, uri):
+        if "://" not in uri:
+            # Assume a local path
+            uri = "file://" + uri
+        parsed = infer_storage_options(uri)
+        path = parsed.pop("path")
+        protocol = parsed.pop("protocol")
+        storage_options = parsed.copy()
+        return cls(path=path, fs_protocol=protocol, fs_storage_options=storage_options)
 
 
 def read_feather_file(path: str, fs: fsspec.AbstractFileSystem = None):

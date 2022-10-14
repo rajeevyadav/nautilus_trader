@@ -45,12 +45,6 @@ from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
 from nautilus_trader.persistence.catalog.parquet import resolve_path
 from nautilus_trader.persistence.catalog.rust.reader import ParquetFileReader
 from nautilus_trader.persistence.catalog.rust.writer import ParquetWriter
-from nautilus_trader.persistence.external.core import dicts_to_dataframes
-from nautilus_trader.persistence.external.core import process_files
-from nautilus_trader.persistence.external.core import split_and_serialize
-from nautilus_trader.persistence.external.core import write_objects
-from nautilus_trader.persistence.external.core import write_tables
-from nautilus_trader.persistence.external.readers import CSVReader
 from tests.integration_tests.adapters.betfair.test_kit import BetfairTestStubs
 from tests.test_kit import PACKAGE_ROOT
 from tests.test_kit.mocks.data import NewsEventData

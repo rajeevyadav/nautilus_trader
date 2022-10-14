@@ -66,19 +66,20 @@ class TestDataStubs:
     @staticmethod
     def quote_tick_3decimal(
         instrument_id=None,
-        bid=None,
-        ask=None,
+        bid: Optional[str] = None,
+        ask: Optional[str] = None,
         bid_volume=None,
         ask_volume=None,
+        ts: int = 0,
     ) -> QuoteTick:
         return QuoteTick(
             instrument_id=instrument_id or TestIdStubs.usdjpy_id(),
-            bid=bid or Price.from_str("90.002"),
-            ask=ask or Price.from_str("90.005"),
+            bid=Price.from_str("90.002" or bid),
+            ask=Price.from_str("90.005" or ask),
             bid_size=bid_volume or Quantity.from_int(1_000_000),
             ask_size=ask_volume or Quantity.from_int(1_000_000),
-            ts_event=0,
-            ts_init=0,
+            ts_event=ts,
+            ts_init=ts,
         )
 
     @staticmethod
