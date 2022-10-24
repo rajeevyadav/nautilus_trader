@@ -24,6 +24,7 @@ from nautilus_trader.common.clock cimport Clock
 from nautilus_trader.common.logging cimport Logger
 from nautilus_trader.core.correctness cimport Condition
 from nautilus_trader.core.datetime cimport nanos_to_micros
+from nautilus_trader.core.rust.core cimport unix_timestamp_ns
 from nautilus_trader.core.uuid cimport UUID4
 from nautilus_trader.model.identifiers cimport TraderId
 from nautilus_trader.msgbus.wildcard cimport is_matching
@@ -365,7 +366,7 @@ cdef class MessageBus:
 
         cdef str pattern
         cdef list subs
-        cdef uint64_t t0 = self._clock.timestamp_ns()
+        cdef uint64_t t0 = unix_timestamp_ns()
         for pattern in patterns:
             if is_matching(topic, pattern):
                 subs = list(self._patterns[pattern])
@@ -373,9 +374,9 @@ cdef class MessageBus:
                 subs = sorted(subs, reverse=True)
                 self._patterns[pattern] = np.ascontiguousarray(subs, dtype=Subscription)
                 matches.append(pattern)
-        cdef uint64_t t1 = self._clock.timestamp_ns()
+        cdef uint64_t t1 = unix_timestamp_ns()
 
-        self._log.debug(f"Matching patterns took {t1-t0} ns ")
+        self._log.debug(f"Matching patterns took {nanos_to_micros(t1-t0)} us ")
 
         self._subscriptions[sub] = sorted(matches)
 
