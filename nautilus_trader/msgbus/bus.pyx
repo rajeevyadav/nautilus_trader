@@ -375,7 +375,7 @@ cdef class MessageBus:
                 matches.append(pattern)
         cdef uint64_t t1 = self._clock.timestamp_ns()
 
-        self._log.debug(f"Matching patterns took {nanos_to_micros(t1-t0)} us ")
+        self._log.debug(f"Matching patterns took {t1-t0} ns ")
 
         self._subscriptions[sub] = sorted(matches)
 
