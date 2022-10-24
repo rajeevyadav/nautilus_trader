@@ -17,7 +17,7 @@ import itertools
 import os
 import pathlib
 import platform
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Optional, Union
 
 import fsspec
 import numpy as np
@@ -51,7 +51,7 @@ class ParquetDataCatalogWriter:
         self,
         path: str,
         fs_protocol: str = "file",
-        fs_storage_options: Optional[Dict] = None,
+        fs_storage_options: Optional[dict] = None,
     ):
         """ """
         self.fs_protocol = fs_protocol
@@ -62,22 +62,22 @@ class ParquetDataCatalogWriter:
         self.str_path = path
         self.path: pathlib.Path = pathlib.Path(path)
 
-    def _make_filename(self, cls: type, partitions: Dict):
+    def _make_filename(self, cls: type, partitions: dict):
         fn = f"{cls.__name__}"
         for k, v in partitions.items():
             fn += f"/{k}={v}"
         return fn + "/"
 
-    def _determine_partition_attrs(self, cls, partitions_attrs: Optional[List[str]]) -> List[str]:
+    def _determine_partition_attrs(self, cls, partitions_attrs: Optional[list[str]]) -> list[str]:
         partitions_attrs = partitions_attrs or []
         if "instrument_id" in dir(cls):
             partitions_attrs = ["instrument_id"] + partitions_attrs
         return partitions_attrs
 
-    def _rust_writer(self, cls: type, objects: List):
+    def _rust_writer(self, cls: type, objects: list):
         pass
 
-    def _pyarrow_writer(self, cls: type, objects: List, partition_attrs: Optional[List[str]]):
+    def _pyarrow_writer(self, cls: type, objects: list, partition_attrs: Optional[list[str]]):
         schema = get_schema(cls)
         partitions = self._determine_partition_attrs(cls, partition_attrs)
 
@@ -85,14 +85,15 @@ class ParquetDataCatalogWriter:
             return tuple(getattr(x, k) for k in partitions)
 
         for part_vals, chunk in itertools.groupby(sorted(objects, key=grouper), key=grouper):
-            chunk = list(chunk)
+            chunk = list(chunk)  # type: ignore
             part = dict(zip(partitions, part_vals))
             filename = self._make_filename(cls=cls, partitions=part)
+            assert filename
             table = pa.Table.from_pylist([obj.to_dict(obj) for obj in chunk], schema=schema)
             print(table)
 
     def write_objects(
-        self, objects: List, partition_attrs: List[str] = None, use_rust=False
+        self, objects: list, partition_attrs: list[str] = None, use_rust=False
     ) -> None:
         assert len(objects), "`objects` list was empty"
         types = set(map(type, objects))
@@ -112,7 +113,7 @@ class ParquetDataCatalogReader:
         self,
         path: str,
         fs_protocol: str = "file",
-        fs_storage_options: Optional[Dict] = None,
+        fs_storage_options: Optional[dict] = None,
     ):
         self.fs_protocol = fs_protocol
         self.fs_storage_options = fs_storage_options or {}
@@ -157,11 +158,11 @@ class ParquetDataCatalogReader:
     def _query(  # noqa (too complex)
         self,
         cls: type,
-        instrument_ids: Optional[List[str]] = None,
+        instrument_ids: Optional[list[str]] = None,
         raise_on_empty: bool = True,
-        table_kwargs: Optional[Dict] = None,
+        table_kwargs: Optional[dict] = None,
         as_dataframe: bool = True,
-        projections: Optional[Dict] = None,
+        projections: Optional[dict] = None,
         **kwargs,
     ):
         if instrument_ids is not None:
@@ -181,8 +182,8 @@ class ParquetDataCatalogReader:
         if projections:
             projected = {**{c: ds.field(c) for c in dataset.schema.names}, **projections}
             table_kwargs.update(columns=projected)
-        table = dataset.to_table(filter=combine_filters(*filters), **(table_kwargs or {}))
-        mappings = self.load_inverse_mappings(path=full_path)
+        table = dataset.to_table(filter=combine_filters(*instrument_ids), **(table_kwargs or {}))
+        # mappings = self.load_inverse_mappings(path=full_path)
 
         if (
             cls in (QuoteTick, TradeTick)
@@ -203,18 +204,18 @@ class ParquetDataCatalogReader:
 
         if as_dataframe:
             return self._handle_table_dataframe(
-                table=table, mappings=mappings, raise_on_empty=raise_on_empty, **kwargs
+                table=table, raise_on_empty=raise_on_empty, **kwargs
             )
         else:
-            return self._handle_table_nautilus(table=table, cls=cls, mappings=mappings)
+            return self._handle_table_nautilus(table=table, cls=cls)
 
     @staticmethod
     def _handle_table_dataframe(
         table: pa.Table,
-        mappings: Optional[Dict],
+        mappings: Optional[dict],
         raise_on_empty: bool = True,
-        sort_columns: Optional[List] = None,
-        as_type: Optional[Dict] = None,
+        sort_columns: Optional[list] = None,
+        as_type: Optional[dict] = None,
     ):
         df = table.to_pandas().drop_duplicates()
         for col in mappings:
@@ -232,7 +233,7 @@ class ParquetDataCatalogReader:
     def _handle_table_nautilus(
         table: Union[pa.Table, pd.DataFrame],
         cls: type,
-        mappings: Optional[Dict],
+        mappings: Optional[dict],
     ):
         if isinstance(table, pa.Table):
             dicts = dict_of_lists_to_list_of_dicts(table.to_pydict())
@@ -258,7 +259,7 @@ class ParquetDataCatalogReader:
     def _query_subclasses(
         self,
         base_cls: type,
-        instrument_ids: Optional[List[str]] = None,
+        instrument_ids: Optional[list[str]] = None,
         filter_expr: Optional[Callable] = None,
         as_nautilus: bool = False,
         **kwargs,
@@ -297,7 +298,7 @@ class ParquetDataCatalogReader:
         self,
         cls: type,
         as_nautilus: bool = False,
-        metadata: Optional[Dict] = None,
+        metadata: Optional[dict] = None,
         filter_expr: Optional[Callable] = None,
         **kwargs,
     ):
@@ -316,7 +317,7 @@ class ParquetDataCatalogReader:
     def instruments(
         self,
         instrument_type: Optional[type] = None,
-        instrument_ids: Optional[List[str]] = None,
+        instrument_ids: Optional[list[str]] = None,
         **kwargs,
     ):
         kwargs["clean_instrument_keys"] = False
@@ -334,7 +335,7 @@ class FeatherDataCatalogReader:
         self,
         path: str,
         fs_protocol: str = "file",
-        fs_storage_options: Optional[Dict] = None,
+        fs_storage_options: Optional[dict] = None,
     ):
         self.fs_protocol = fs_protocol
         self.fs_storage_options = fs_storage_options or {}
@@ -359,11 +360,11 @@ class FeatherDataCatalogReader:
             partitions[level.name] = level.keys
         return partitions
 
-    def list_backtests(self) -> List[str]:
+    def list_backtests(self) -> list[str]:
         glob = resolve_path(self.path / "backtest" / "*.feather", fs=self.fs)
         return [p.stem for p in map(pathlib.Path, self.fs.glob(glob))]
 
-    def list_live_runs(self) -> List[str]:
+    def list_live_runs(self) -> list[str]:
         glob = resolve_path(self.path / "live" / "*.feather", fs=self.fs)
         return [p.stem for p in map(pathlib.Path, self.fs.glob(glob))]
 
@@ -374,7 +375,7 @@ class FeatherDataCatalogReader:
         return self._read_feather(kind="backtest", run_id=backtest_run_id, **kwargs)
 
     def _read_feather(self, kind: str, run_id: str, raise_on_failed_deserialize: bool = False):
-        class_mapping: Dict[str, type] = {class_to_filename(cls): cls for cls in list_schemas()}
+        class_mapping: dict[str, type] = {class_to_filename(cls): cls for cls in list_schemas()}
         data = {}
         glob_path = resolve_path(self.path / kind / f"{run_id}.feather" / "*.feather", fs=self.fs)
         for path in [p for p in self.fs.glob(glob_path)]:
@@ -414,7 +415,7 @@ class ParquetDataCatalog(BaseDataCatalog):
         self,
         path: str,
         fs_protocol: str = "file",
-        fs_storage_options: Optional[Dict] = None,
+        fs_storage_options: Optional[dict] = None,
     ):
         self.fs_protocol = fs_protocol
         self.fs_storage_options = fs_storage_options or {}
