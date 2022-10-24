@@ -432,6 +432,7 @@ class NautilusKernelConfig(NautilusConfig):
     data_engine: DataEngineConfig = None
     risk_engine: RiskEngineConfig = None
     exec_engine: ExecEngineConfig = None
+    msgbus: MessageBusConfig = None
     streaming: Optional[StreamingConfig] = None
     actors: list[ImportableActorConfig] = Field(default_factory=list)
     strategies: list[ImportableStrategyConfig] = Field(default_factory=list)

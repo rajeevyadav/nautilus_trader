@@ -27,6 +27,7 @@ from nautilus_trader.config import CacheDatabaseConfig
 from nautilus_trader.config import DataEngineConfig
 from nautilus_trader.config import ExecEngineConfig
 from nautilus_trader.config import RiskEngineConfig
+from nautilus_trader.config.common import MessageBusConfig
 from nautilus_trader.config.error import InvalidConfiguration
 from nautilus_trader.system.kernel import NautilusKernel
 
@@ -126,6 +127,7 @@ cdef class BacktestEngine:
             data_config=config.data_engine or DataEngineConfig(),
             risk_config=config.risk_engine or RiskEngineConfig(),
             exec_config=config.exec_engine or ExecEngineConfig(),
+            msgbus_config=config.msgbus or MessageBusConfig(),
             streaming_config=config.streaming,
             actor_configs=config.actors,
             strategy_configs=config.strategies,
