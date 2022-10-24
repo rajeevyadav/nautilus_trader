@@ -201,6 +201,14 @@ class OrderEmulatorConfig(NautilusConfig):
     pass
 
 
+class MessageBusConfig(NautilusConfig):
+    """
+    Configuration for ``MessageBus`` instance.
+    """
+
+    debug: bool = False
+
+
 class StreamingConfig(NautilusConfig):
     """
     Configuration for streaming live or backtest runs to the catalog in feather format.

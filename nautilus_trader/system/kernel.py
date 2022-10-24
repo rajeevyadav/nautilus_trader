@@ -50,6 +50,7 @@ from nautilus_trader.config import OrderEmulatorConfig
 from nautilus_trader.config import RiskEngineConfig
 from nautilus_trader.config import StrategyFactory
 from nautilus_trader.config import StreamingConfig
+from nautilus_trader.config.common import MessageBusConfig
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.core.datetime import nanos_to_millis
 from nautilus_trader.core.uuid import UUID4
@@ -149,6 +150,7 @@ class NautilusKernel:
         risk_config: Union[RiskEngineConfig, LiveRiskEngineConfig],
         exec_config: Union[ExecEngineConfig, LiveExecEngineConfig],
         emulator_config: Optional[OrderEmulatorConfig] = None,
+        msgbus_config: Optional[MessageBusConfig] = None,
         streaming_config: Optional[StreamingConfig] = None,
         actor_configs: Optional[list[ImportableActorConfig]] = None,
         strategy_configs: Optional[list[ImportableStrategyConfig]] = None,
@@ -271,6 +273,7 @@ class NautilusKernel:
             trader_id=self._trader_id,
             clock=self._clock,
             logger=self._logger,
+            debug=msgbus_config.debug if msgbus_config is not None else False,
         )
 
         self._cache = Cache(

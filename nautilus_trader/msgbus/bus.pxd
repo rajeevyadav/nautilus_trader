@@ -22,6 +22,7 @@ from nautilus_trader.msgbus.subscription cimport Subscription
 
 
 cdef class MessageBus:
+    cdef bint debug
     cdef Clock _clock
     cdef LoggerAdapter _log
     cdef dict _subscriptions
