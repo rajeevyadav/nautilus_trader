@@ -17,6 +17,7 @@ from cpython.object cimport PyObject
 from libc.stdint cimport int64_t
 from libc.stdint cimport uint8_t
 from libc.stdint cimport uint64_t
+from libc.stdio cimport printf
 
 from nautilus_trader.core.correctness cimport Condition
 from nautilus_trader.core.data cimport Data
@@ -97,7 +98,7 @@ cdef class QuoteTick(Data):
             ts_init,
         )
 
-    def __del__(self) -> None:
+    def __dealloc__(self) -> None:
         quote_tick_free(self._mem)  # `self._mem` moved to Rust (then dropped)
 
     def __getstate__(self):

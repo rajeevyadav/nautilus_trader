@@ -13,9 +13,12 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result};
 
-use pyo3::ffi;
+use pyo3::ffi::{self, PyDictObject};
+use pyo3::types::PyDict;
+use pyo3::{PyObject, Python};
 
 use crate::enums::OrderSide;
 use crate::identifiers::instrument_id::InstrumentId;
@@ -160,6 +163,32 @@ pub extern "C" fn quote_tick_new(
         ts_event,
         ts_init,
     )
+}
+
+pub unsafe extern "C" fn quote_tick_from_dict(data: *mut ffi::PyObject) -> QuoteTick {
+    let data: HashMap<String, String> =
+        Python::with_gil(|py| PyObject::from_borrowed_ptr(py, data).extract(py))
+            .expect("Could not extract dict");
+    println!("{:?}", &data);
+    QuoteTick {
+        instrument_id: InstrumentId::from(
+            data.get("instrument_id").expect("instrument_id not found"),
+        ),
+        bid: Price::from(data.get("bid").expect("bid not found").as_str()),
+        ask: Price::from(data.get("ask").expect("ask not found").as_str()),
+        bid_size: Quantity::from(data.get("bid_size").expect("bid_size not found").as_str()),
+        ask_size: Quantity::from(data.get("ask_size").expect("ask_size not found").as_str()),
+        ts_event: data
+            .get("ts_event")
+            .expect("ts_event not found")
+            .parse()
+            .unwrap(),
+        ts_init: data
+            .get("ts_init")
+            .expect("ts_init not found")
+            .parse()
+            .unwrap(),
+    }
 }
 
 #[no_mangle]

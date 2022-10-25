@@ -136,7 +136,7 @@ cdef class Symbol(Identifier):
     def __init__(self, str value):
         self._mem = symbol_new(<PyObject *>value)
 
-    def __del__(self) -> None:
+    def __dealloc__(self) -> None:
         symbol_free(self._mem)  # `self._mem` moved to Rust (then dropped)
 
     def __getstate__(self):
@@ -172,7 +172,7 @@ cdef class Venue(Identifier):
     def __init__(self, str name):
         self._mem = venue_new(<PyObject *>name)
 
-    def __del__(self) -> None:
+    def __dealloc__(self) -> None:
         venue_free(self._mem)  # `self._mem` moved to Rust (then dropped)
 
     def __getstate__(self):
@@ -216,7 +216,7 @@ cdef class InstrumentId(Identifier):
         self.symbol = symbol
         self.venue = venue
 
-    def __del__(self) -> None:
+    def __dealloc__(self) -> None:
         instrument_id_free(self._mem)  # `self._mem` moved to Rust (then dropped)
 
     def __getstate__(self):

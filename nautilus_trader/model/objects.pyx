@@ -114,7 +114,7 @@ cdef class Quantity:
 
         self._mem = quantity_new(value, precision)
 
-    def __del__(self) -> None:
+    def __dealloc__(self) -> None:
         quantity_free(self._mem)  # `self._mem` moved to Rust (then dropped)
 
     def __getstate__(self):
@@ -505,7 +505,7 @@ cdef class Price:
 
         self._mem = price_new(value, precision)
 
-    def __del__(self) -> None:
+    def __dealloc__(self) -> None:
         price_free(self._mem)  # `self._mem` moved to Rust (then dropped)
 
     def __getstate__(self):
